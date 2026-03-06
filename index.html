@@ -567,7 +567,7 @@
         // Show overdue + today first, then upcoming (next 30 days)
         const overdue = tasks.filter(t => t.due_date && t.due_date < today);
         const dueToday = tasks.filter(t => t.due_date === today);
-        const upcoming = tasks.filter(t => !t.due_date || t.due_date > today);
+        const upcoming = tasks.filter(t => !t.due_date);
 
         const visibleTasks = [...overdue, ...dueToday, ...upcoming];
 
