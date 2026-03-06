@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f0f4f8;
+            color: #1a202c;
+            min-height: 100vh;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+            color: white;
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-left h1 { font-size: 22px; font-weight: 700; }
+        .header-left .date { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+        .header-right { display: flex; gap: 10px; }
+        .header-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .header-btn:hover { background: rgba(255,255,255,0.3); }
+
+        /* ── LAYOUT ── */
+        .main {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 28px 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+        }
+
+        /* ── PANELS ── */
+        .panel {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 16px 20px 14px;
+            border-bottom: 2px solid #f3f4f6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-title .icon { font-size: 18px; }
+        .panel-count {
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+        .panel-count.teal { background: #ccfbf1; color: #0f766e; }
+        .panel-count.amber { background: #fef3c7; color: #92400e; }
+        .panel-count.red { background: #fee2e2; color: #991b1b; }
+        .panel-body { padding: 16px 20px; }
+        .panel-add-btn {
+            background: #14b8a6;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .panel-add-btn:hover { background: #0d9488; }
+
+        /* ── CALENDAR EVENTS ── */
+        .cal-event {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            align-items: flex-start;
+        }
+        .cal-event:last-child { border-bottom: none; }
+        .cal-time {
+            font-size: 12px;
+            font-weight: 700;
+            color: #14b8a6;
+            min-width: 52px;
+            margin-top: 1px;
+        }
+        .cal-time.allday { color: #9ca3af; font-weight: 600; }
+        .cal-title { font-size: 14px; color: #1a202c; line-height: 1.4; }
+        .cal-location { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        .cal-loading { text-align: center; color: #9ca3af; padding: 24px; font-size: 14px; }
+        .cal-error { text-align: center; color: #ef4444; padding: 24px; font-size: 13px; }
+
+        /* ── TASKS ── */
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .task-item:last-child { border-bottom: none; }
+        .task-check {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-top: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .task-check:hover { border-color: #14b8a6; }
+        .task-check.done { background: #14b8a6; border-color: #14b8a6; color: white; font-size: 11px; }
+        .task-body { flex: 1; min-width: 0; }
+        .task-title { font-size: 14px; color: #1a202c; line-height: 1.4; }
+        .task-title.done { text-decoration: line-through; color: #9ca3af; }
+        .task-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+        .task-date { font-size: 11px; color: #6b7280; }
+        .task-date.overdue { color: #ef4444; font-weight: 600; }
+        .task-date.today { color: #f59e0b; font-weight: 600; }
+        .task-notes { font-size: 12px; color: #9ca3af; font-style: italic; }
+        .task-cat {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .task-actions { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+        .task-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 4px;
+            color: #9ca3af;
+            border-radius: 4px;
+        }
+        .task-btn:hover { color: #374151; background: #f3f4f6; }
+        .empty-panel { text-align: center; color: #9ca3af; padding: 28px 16px; font-size: 14px; }
+
+        /* ── WEEKLY TASKS ── */
+        .weekly-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .weekly-item:last-child { border-bottom: none; }
+        .weekly-check {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #d1d5db;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            transition: all 0.15s;
+        }
+        .weekly-check:hover { border-color: #14b8a6; }
+        .weekly-check.done { background: #14b8a6; border-color: #14b8a6; color: white; }
+        .weekly-title { font-size: 14px; color: #1a202c; flex: 1; }
+        .weekly-title.done { text-decoration: line-through; color: #9ca3af; }
+        .weekly-progress {
+            background: #f0fdfa;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .weekly-progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .weekly-progress-fill {
+            height: 100%;
+            background: #14b8a6;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .weekly-progress-text { font-size: 12px; font-weight: 700; color: #0f766e; white-space: nowrap; }
+
+        /* ── MODALS ── */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 9999;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .modal.show { display: flex; align-items: flex-start; justify-content: center; padding-top: 60px; }
+        .modal-content {
+            background: white;
+            border-radius: 14px;
+            padding: 28px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .modal h3 { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #1a202c; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            color: #1a202c;
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #14b8a6;
+        }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; }
+        .btn-cancel { background: #f3f4f6; color: #374151; }
+        .btn-cancel:hover { background: #e5e7eb; }
+        .btn-save { background: #14b8a6; color: white; }
+        .btn-save:hover { background: #0d9488; }
+        .btn-danger { background: #ef4444; color: white; flex: 0.5; }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* ── WEEKLY TASKS ADMIN ── */
+        .weekly-admin-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .weekly-admin-item:last-child { border-bottom: none; }
+        .weekly-admin-title { flex: 1; font-size: 14px; }
+
+        /* ── LOADING ── */
+        .spinner {
+            display: inline-block;
+            width: 20px; height: 20px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #14b8a6;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <h1>📋 My Dashboard</h1>
+        <div class="date" id="headerDate"></div>
+    </div>
+    <div class="header-right">
+        <button class="header-btn" onclick="openAddTaskModal()">+ Add Task</button>
+        <button class="header-btn" onclick="openWeeklyAdminModal()">⚙️ Weekly Tasks</button>
+        <button class="header-btn" onclick="refreshCalendar()">↻ Refresh</button>
+    </div>
+</div>
+
+<div class="main">
+
+    <!-- Column 1: Calendar -->
+    <div class="panel">
+        <div class="panel-header">
+            <div class="panel-title"><span class="icon">📅</span> Today's Calendar</div>
+            <span class="panel-count teal" id="calCount">...</span>
+        </div>
+        <div class="panel-body" id="calendarPanel">
+            <div class="cal-loading"><span class="spinner"></span>Loading events...</div>
+        </div>
+    </div>
+
+    <!-- Column 2: Tasks -->
+    <div class="panel">
+        <div class="panel-header">
+            <div class="panel-title"><span class="icon">✅</span> Tasks</div>
+            <span class="panel-count amber" id="taskCount">...</span>
+        </div>
+        <div class="panel-body" id="tasksPanel">
+            <div class="cal-loading"><span class="spinner"></span>Loading tasks...</div>
+        </div>
+    </div>
+
+    <!-- Column 3: Weekly -->
+    <div class="panel">
+        <div class="panel-header">
+            <div class="panel-title"><span class="icon">🔁</span> This Week</div>
+            <span class="panel-count" id="weeklyCount">...</span>
+        </div>
+        <div class="panel-body" id="weeklyPanel">
+            <div class="cal-loading"><span class="spinner"></span>Loading...</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Add / Edit Task Modal -->
+<div class="modal" id="taskModal">
+    <div class="modal-content">
+        <h3 id="taskModalTitle">Add Task</h3>
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="tTitle" placeholder="What needs doing?">
+        </div>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="tCategory">
+                <option value="">No category</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="tDueDate">
+        </div>
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea id="tNotes" rows="3" placeholder="Any extra details..."></textarea>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-cancel" onclick="closeTaskModal()">Cancel</button>
+            <button class="btn btn-danger hidden" id="tDeleteBtn" onclick="deleteTask()">Delete</button>
+            <button class="btn btn-save" onclick="saveTask()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Weekly Tasks Admin Modal -->
+<div class="modal" id="weeklyAdminModal">
+    <div class="modal-content">
+        <h3>⚙️ Weekly Tasks</h3>
+        <div id="weeklyAdminList"></div>
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #f3f4f6;">
+            <div class="form-group">
+                <label>Add New Weekly Task</label>
+                <input type="text" id="newWeeklyTitle" placeholder="Task title...">
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-cancel" onclick="closeWeeklyAdminModal()">Close</button>
+                <button class="btn btn-save" onclick="addWeeklyTask()">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ─── SUPABASE ─────────────────────────────────────────────────────────
+    const SUPABASE_URL = 'https://hebuaabantmnfdxxkaif.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_xzVfo0l-eLpkP4TuUy17KQ_kLLUUScF';
+    const CALENDAR_ICS = 'https://calendar.google.com/calendar/ical/cmbygrave25%40gmail.com/private-157c6b0ca1683174a9c44bfc0cfad341/basic.ics';
+    const CORS_PROXY = 'https://corsproxy.io/?';
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ─── STATE ────────────────────────────────────────────────────────────
+    let tasks = [];
+    let categories = [];
+    let weeklyTasks = [];
+    let weeklyCompletions = [];
+    let editingTaskId = null;
+
+    // ─── INIT ─────────────────────────────────────────────────────────────
+    async function init() {
+        setHeaderDate();
+        await loadData();
+        loadCalendar();
+        renderTasks();
+        renderWeekly();
+    }
+
+    function setHeaderDate() {
+        const now = new Date();
+        const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+        document.getElementById('headerDate').textContent = now.toLocaleDateString('en-GB', options);
+    }
+
+    async function loadData() {
+        const weekStart = getWeekStart();
+        const [catsRes, tasksRes, weeklyRes, completionsRes] = await Promise.all([
+            db.from('task_categories').select('*').order('sort_order'),
+            db.from('tasks').select('*, task_categories(name, color)').eq('is_done', false).order('due_date', { ascending: true, nullsFirst: false }),
+            db.from('weekly_tasks').select('*').eq('is_active', true).order('sort_order'),
+            db.from('weekly_completions').select('*').eq('week_start', weekStart)
+        ]);
+        categories = catsRes.data || [];
+        tasks = tasksRes.data || [];
+        weeklyTasks = weeklyRes.data || [];
+        weeklyCompletions = completionsRes.data || [];
+    }
+
+    // ─── DATE HELPERS ─────────────────────────────────────────────────────
+    function getWeekStart() {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(now);
+        monday.setDate(diff);
+        monday.setHours(0, 0, 0, 0);
+        return monday.toISOString().split('T')[0];
+    }
+
+    function isToday(dateStr) {
+        return dateStr === new Date().toISOString().split('T')[0];
+    }
+
+    function isOverdue(dateStr) {
+        return dateStr && dateStr < new Date().toISOString().split('T')[0];
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr + 'T00:00:00');
+        if (isToday(dateStr)) return 'Today';
+        if (isOverdue(dateStr)) {
+            const diff = Math.floor((new Date().setHours(0,0,0,0) - d) / 86400000);
+            return `${diff}d overdue`;
+        }
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    // ─── CALENDAR ─────────────────────────────────────────────────────────
+    async function loadCalendar() {
+        const panel = document.getElementById('calendarPanel');
+        try {
+            const response = await fetch(CORS_PROXY + encodeURIComponent(CALENDAR_ICS));
+            if (!response.ok) throw new Error('Failed to fetch calendar');
+            const text = await response.text();
+            const events = parseICS(text);
+            const today = new Date().toISOString().split('T')[0];
+            const todayEvents = events.filter(e => e.date === today);
+            todayEvents.sort((a, b) => {
+                if (a.allDay && !b.allDay) return -1;
+                if (!a.allDay && b.allDay) return 1;
+                return (a.time || '').localeCompare(b.time || '');
+            });
+
+            document.getElementById('calCount').textContent = todayEvents.length;
+
+            if (todayEvents.length === 0) {
+                panel.innerHTML = '<div class="empty-panel">Nothing scheduled today 🎉</div>';
+                return;
+            }
+
+            panel.innerHTML = todayEvents.map(e => `
+                <div class="cal-event">
+                    <div class="cal-time ${e.allDay ? 'allday' : ''}">${e.allDay ? 'All day' : e.time}</div>
+                    <div>
+                        <div class="cal-title">${e.title}</div>
+                        ${e.location ? `<div class="cal-location">📍 ${e.location}</div>` : ''}
+                    </div>
+                </div>`).join('');
+        } catch (err) {
+            console.error('Calendar error:', err);
+            panel.innerHTML = `<div class="cal-error">Could not load calendar.<br><small>${err.message}</small></div>`;
+            document.getElementById('calCount').textContent = '—';
+        }
+    }
+
+    function parseICS(text) {
+        const events = [];
+        const lines = text.replace(/\r\n /g, '').replace(/\r\n/g, '\n').split('\n');
+        let current = null;
+
+        for (const line of lines) {
+            if (line === 'BEGIN:VEVENT') {
+                current = {};
+            } else if (line === 'END:VEVENT' && current) {
+                if (current.title) events.push(current);
+                current = null;
+            } else if (current) {
+                if (line.startsWith('SUMMARY:')) {
+                    current.title = line.replace('SUMMARY:', '').trim();
+                } else if (line.startsWith('LOCATION:')) {
+                    current.location = line.replace('LOCATION:', '').trim();
+                } else if (line.startsWith('DTSTART;VALUE=DATE:')) {
+                    const d = line.replace('DTSTART;VALUE=DATE:', '').trim();
+                    current.date = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+                    current.allDay = true;
+                } else if (line.startsWith('DTSTART:')) {
+                    const raw = line.replace('DTSTART:', '').trim();
+                    current.date = `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
+                    if (raw.length > 8) {
+                        const h = raw.slice(9,11);
+                        const m = raw.slice(11,13);
+                        // Convert UTC to local
+                        const utc = new Date(`${current.date}T${h}:${m}:00Z`);
+                        current.date = utc.toISOString().split('T')[0];
+                        current.time = utc.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        current.allDay = false;
+                    } else {
+                        current.allDay = true;
+                    }
+                }
+            }
+        }
+        return events;
+    }
+
+    function refreshCalendar() {
+        document.getElementById('calendarPanel').innerHTML = '<div class="cal-loading"><span class="spinner"></span>Refreshing...</div>';
+        loadCalendar();
+    }
+
+    // ─── TASKS ────────────────────────────────────────────────────────────
+    function renderTasks() {
+        const panel = document.getElementById('tasksPanel');
+        const today = new Date().toISOString().split('T')[0];
+
+        // Show overdue + today first, then upcoming (next 30 days)
+        const overdue = tasks.filter(t => t.due_date && t.due_date < today);
+        const dueToday = tasks.filter(t => t.due_date === today);
+        const upcoming = tasks.filter(t => !t.due_date || t.due_date > today);
+
+        const visibleTasks = [...overdue, ...dueToday, ...upcoming];
+
+        document.getElementById('taskCount').textContent = `${overdue.length + dueToday.length} due`;
+        if (overdue.length > 0) {
+            document.getElementById('taskCount').className = 'panel-count red';
+        } else if (dueToday.length > 0) {
+            document.getElementById('taskCount').className = 'panel-count amber';
+        } else {
+            document.getElementById('taskCount').className = 'panel-count teal';
+        }
+
+        if (visibleTasks.length === 0) {
+            panel.innerHTML = '<div class="empty-panel">All done! Nothing pending 🎉</div>';
+            return;
+        }
+
+        panel.innerHTML = visibleTasks.map(t => {
+            const dateStr = formatDate(t.due_date);
+            const dateClass = isOverdue(t.due_date) ? 'task-date overdue' : isToday(t.due_date) ? 'task-date today' : 'task-date';
+            const cat = t.task_categories;
+            const catHtml = cat ? `<span class="task-cat" style="background:${cat.color}22; color:${cat.color}">${cat.name}</span>` : '';
+            return `<div class="task-item">
+                <div class="task-check" onclick="completeTask(${t.id})"></div>
+                <div class="task-body">
+                    <div class="task-title">${t.title}</div>
+                    <div class="task-meta">
+                        ${dateStr ? `<span class="${dateClass}">📅 ${dateStr}</span>` : ''}
+                        ${catHtml}
+                        ${t.notes ? `<span class="task-notes">${t.notes}</span>` : ''}
+                    </div>
+                </div>
+                <div class="task-actions">
+                    <button class="task-btn" onclick="openEditTaskModal(${t.id})" title="Edit">✏️</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function completeTask(id) {
+        await db.from('tasks').update({ is_done: true, completed_at: new Date().toISOString() }).eq('id', id);
+        tasks = tasks.filter(t => t.id !== id);
+        renderTasks();
+    }
+
+    // ─── TASK MODAL ───────────────────────────────────────────────────────
+    function openAddTaskModal() {
+        editingTaskId = null;
+        document.getElementById('taskModalTitle').textContent = 'Add Task';
+        document.getElementById('tTitle').value = '';
+        document.getElementById('tDueDate').value = '';
+        document.getElementById('tNotes').value = '';
+        document.getElementById('tDeleteBtn').classList.add('hidden');
+        populateCategorySelect();
+        document.getElementById('taskModal').classList.add('show');
+        setTimeout(() => document.getElementById('tTitle').focus(), 100);
+    }
+
+    function openEditTaskModal(id) {
+        editingTaskId = id;
+        const task = tasks.find(t => t.id === id);
+        document.getElementById('taskModalTitle').textContent = 'Edit Task';
+        document.getElementById('tTitle').value = task.title;
+        document.getElementById('tDueDate').value = task.due_date || '';
+        document.getElementById('tNotes').value = task.notes || '';
+        document.getElementById('tDeleteBtn').classList.remove('hidden');
+        populateCategorySelect(task.category_id);
+        document.getElementById('taskModal').classList.add('show');
+    }
+
+    function populateCategorySelect(selectedId = null) {
+        const sel = document.getElementById('tCategory');
+        sel.innerHTML = '<option value="">No category</option>' +
+            categories.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name}</option>`).join('');
+    }
+
+    function closeTaskModal() {
+        document.getElementById('taskModal').classList.remove('show');
+    }
+
+    async function saveTask() {
+        const title = document.getElementById('tTitle').value.trim();
+        if (!title) return;
+        const payload = {
+            title,
+            category_id: document.getElementById('tCategory').value || null,
+            due_date: document.getElementById('tDueDate').value || null,
+            notes: document.getElementById('tNotes').value.trim() || null,
+            is_done: false
+        };
+
+        if (editingTaskId) {
+            const { data } = await db.from('tasks').update(payload).eq('id', editingTaskId)
+                .select('*, task_categories(name, color)').single();
+            tasks = tasks.map(t => t.id === editingTaskId ? data : t);
+        } else {
+            const { data } = await db.from('tasks').insert(payload)
+                .select('*, task_categories(name, color)').single();
+            tasks.unshift(data);
+            tasks.sort((a, b) => {
+                if (!a.due_date) return 1;
+                if (!b.due_date) return -1;
+                return a.due_date.localeCompare(b.due_date);
+            });
+        }
+
+        closeTaskModal();
+        renderTasks();
+    }
+
+    async function deleteTask() {
+        if (!editingTaskId) return;
+        if (!confirm('Delete this task?')) return;
+        await db.from('tasks').delete().eq('id', editingTaskId);
+        tasks = tasks.filter(t => t.id !== editingTaskId);
+        closeTaskModal();
+        renderTasks();
+    }
+
+    // ─── WEEKLY TASKS ─────────────────────────────────────────────────────
+    function renderWeekly() {
+        const panel = document.getElementById('weeklyPanel');
+        const doneIds = weeklyCompletions.map(c => c.weekly_task_id);
+        const doneCount = weeklyTasks.filter(t => doneIds.includes(t.id)).length;
+        const total = weeklyTasks.length;
+        const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
+        document.getElementById('weeklyCount').textContent = `${doneCount}/${total}`;
+        document.getElementById('weeklyCount').className = doneCount === total && total > 0 ? 'panel-count teal' : 'panel-count';
+
+        if (weeklyTasks.length === 0) {
+            panel.innerHTML = '<div class="empty-panel">No weekly tasks yet.<br>Add some with ⚙️ Weekly Tasks above.</div>';
+            return;
+        }
+
+        const progressHtml = `<div class="weekly-progress">
+            <div class="weekly-progress-bar">
+                <div class="weekly-progress-fill" style="width: ${pct}%"></div>
+            </div>
+            <div class="weekly-progress-text">${doneCount} of ${total}</div>
+        </div>`;
+
+        const itemsHtml = weeklyTasks.map(t => {
+            const done = doneIds.includes(t.id);
+            return `<div class="weekly-item">
+                <div class="weekly-check ${done ? 'done' : ''}" onclick="toggleWeeklyTask(${t.id})">
+                    ${done ? '✓' : ''}
+                </div>
+                <div class="weekly-title ${done ? 'done' : ''}">${t.title}</div>
+            </div>`;
+        }).join('');
+
+        panel.innerHTML = progressHtml + itemsHtml;
+    }
+
+    async function toggleWeeklyTask(taskId) {
+        const weekStart = getWeekStart();
+        const existing = weeklyCompletions.find(c => c.weekly_task_id === taskId);
+
+        if (existing) {
+            await db.from('weekly_completions').delete().eq('id', existing.id);
+            weeklyCompletions = weeklyCompletions.filter(c => c.id !== existing.id);
+        } else {
+            const { data } = await db.from('weekly_completions').insert({
+                weekly_task_id: taskId,
+                week_start: weekStart
+            }).select().single();
+            weeklyCompletions.push(data);
+        }
+        renderWeekly();
+    }
+
+    // ─── WEEKLY ADMIN MODAL ───────────────────────────────────────────────
+    function openWeeklyAdminModal() {
+        renderWeeklyAdminList();
+        document.getElementById('newWeeklyTitle').value = '';
+        document.getElementById('weeklyAdminModal').classList.add('show');
+    }
+
+    function renderWeeklyAdminList() {
+        const list = document.getElementById('weeklyAdminList');
+        if (weeklyTasks.length === 0) {
+            list.innerHTML = '<div class="empty-panel" style="padding: 12px;">No weekly tasks yet.</div>';
+            return;
+        }
+        list.innerHTML = weeklyTasks.map(t => `
+            <div class="weekly-admin-item">
+                <div class="weekly-admin-title">${t.title}</div>
+                <button class="task-btn" onclick="deleteWeeklyTask(${t.id})" title="Delete">🗑️</button>
+            </div>`).join('');
+    }
+
+    function closeWeeklyAdminModal() {
+        document.getElementById('weeklyAdminModal').classList.remove('show');
+    }
+
+    async function addWeeklyTask() {
+        const title = document.getElementById('newWeeklyTitle').value.trim();
+        if (!title) return;
+        const { data } = await db.from('weekly_tasks').insert({
+            title,
+            sort_order: weeklyTasks.length + 1,
+            is_active: true
+        }).select().single();
+        weeklyTasks.push(data);
+        document.getElementById('newWeeklyTitle').value = '';
+        renderWeeklyAdminList();
+        renderWeekly();
+    }
+
+    async function deleteWeeklyTask(id) {
+        if (!confirm('Remove this weekly task?')) return;
+        await db.from('weekly_tasks').delete().eq('id', id);
+        weeklyTasks = weeklyTasks.filter(t => t.id !== id);
+        weeklyCompletions = weeklyCompletions.filter(c => c.weekly_task_id !== id);
+        renderWeeklyAdminList();
+        renderWeekly();
+    }
+
+    // Close modals on background click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', e => {
+            if (e.target === modal) modal.classList.remove('show');
+        });
+    });
+
+    // Keyboard shortcut — press N to add task
+    document.addEventListener('keydown', e => {
+        if (e.key === 'n' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            openAddTaskModal();
+        }
+    });
+
+    init();
+</script>
+</body>
+</html>
