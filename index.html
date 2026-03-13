@@ -591,45 +591,59 @@
         }
     }
 
-    function parseICS(text) {
-        const events = [];
-        const lines = text.replace(/\r\n /g, '').replace(/\r\n/g, '\n').split('\n');
-        let current = null;
+ function parseICS(text) {
+    const events = [];
+    const lines = text.replace(/\r\n /g, '').replace(/\r\n/g, '\n').split('\n');
+    let current = null;
 
-        for (const line of lines) {
-            if (line === 'BEGIN:VEVENT') {
-                current = {};
-            } else if (line === 'END:VEVENT' && current) {
-                if (current.title) events.push(current);
-                current = null;
-            } else if (current) {
-                if (line.startsWith('SUMMARY:')) {
-                    current.title = line.replace('SUMMARY:', '').trim();
-                } else if (line.startsWith('LOCATION:')) {
-                    current.location = line.replace('LOCATION:', '').trim();
-                } else if (line.startsWith('DTSTART;VALUE=DATE:')) {
-                    const d = line.replace('DTSTART;VALUE=DATE:', '').trim();
-                    current.date = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+    for (const line of lines) {
+        if (line === 'BEGIN:VEVENT') {
+            current = {};
+        } else if (line === 'END:VEVENT' && current) {
+            if (current.title) events.push(current);
+            current = null;
+        } else if (current) {
+            if (line.startsWith('SUMMARY:')) {
+                current.title = line.replace('SUMMARY:', '').trim();
+            } else if (line.startsWith('LOCATION:')) {
+                current.location = line.replace('LOCATION:', '').trim();
+            } else if (line.startsWith('DTSTART;VALUE=DATE:')) {
+                const d = line.replace('DTSTART;VALUE=DATE:', '').trim();
+                current.date = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+                current.allDay = true;
+            } else if (line.startsWith('DTSTART;TZID=') || line.startsWith('DTSTART:')) {
+                const raw = line.includes(':') ? line.split(':').slice(1).join(':').trim() : '';
+                if (!raw) continue;
+
+                const year  = raw.slice(0,4);
+                const month = raw.slice(4,6);
+                const day   = raw.slice(6,8);
+
+                if (raw.length <= 8) {
+                    // Date only
+                    current.date = `${year}-${month}-${day}`;
                     current.allDay = true;
-                } else if (line.startsWith('DTSTART:')) {
-                    const raw = line.replace('DTSTART:', '').trim();
-                    current.date = `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
-                    if (raw.length > 8) {
-                        const h = raw.slice(9,11);
-                        const m = raw.slice(11,13);
-                        // Convert UTC to local
-                        const utc = new Date(`${current.date}T${h}:${m}:00Z`);
-                        current.date = utc.toISOString().split('T')[0];
-                        current.time = utc.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                        current.allDay = false;
-                    } else {
-                        current.allDay = true;
-                    }
+                } else if (raw.endsWith('Z')) {
+                    // UTC time — convert to local
+                    const h = raw.slice(9,11);
+                    const m = raw.slice(11,13);
+                    const utc = new Date(`${year}-${month}-${day}T${h}:${m}:00Z`);
+                    current.date = utc.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+                    current.time = utc.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    current.allDay = false;
+                } else {
+                    // Local time with TZID — no conversion needed
+                    const h = raw.slice(9,11);
+                    const m = raw.slice(11,13);
+                    current.date = `${year}-${month}-${day}`;
+                    current.time = `${h}:${m}`;
+                    current.allDay = false;
                 }
             }
         }
-        return events;
     }
+    return events;
+}
 
     function refreshCalendar() {
         document.getElementById('calendarPanel').innerHTML = '<div class="cal-loading"><span class="spinner"></span>Refreshing...</div>';
