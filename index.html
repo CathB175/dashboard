@@ -481,8 +481,7 @@
     // ─── SUPABASE ─────────────────────────────────────────────────────────
     const SUPABASE_URL = 'https://hebuaabantmnfdxxkaif.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_xzVfo0l-eLpkP4TuUy17KQ_kLLUUScF';
-    const CALENDAR_ICS = 'https://calendar.google.com/calendar/ical/cmbygrave25%40gmail.com/public/basic.ics';
-    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+    const CALENDAR_ICS = 'https://script.google.com/macros/s/AKfycbzS6cXphSl1652CoD3ROjSvuet26Jkiq1I-E7zFAmsae2emgH6_7L_D-iEdFfV09CdImw/exec';
 
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -557,7 +556,7 @@
     async function loadCalendar() {
         const panel = document.getElementById('calendarPanel');
         try {
-            const response = await fetch(CORS_PROXY + encodeURIComponent(CALENDAR_ICS));
+            const response = await fetch(CALENDAR_ICS);
             if (!response.ok) throw new Error('Failed to fetch calendar');
             const text = await response.text();
             const events = parseICS(text);
