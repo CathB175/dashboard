@@ -557,9 +557,14 @@
         const panel = document.getElementById('calendarPanel');
         try {
             const response = await fetch(CALENDAR_ICS);
+
+               
             if (!response.ok) throw new Error('Failed to fetch calendar');
+            
             const text = await response.text();
-            const events = parseICS(text);
+console.log(text); // add this line temporarily
+const events = parseICS(text);
+            
             const today = new Date().toISOString().split('T')[0];
             const todayEvents = events.filter(e => e.date === today);
             todayEvents.sort((a, b) => {
