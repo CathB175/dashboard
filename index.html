@@ -481,7 +481,7 @@
     // ─── SUPABASE ─────────────────────────────────────────────────────────
     const SUPABASE_URL = 'https://hebuaabantmnfdxxkaif.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_xzVfo0l-eLpkP4TuUy17KQ_kLLUUScF';
-    const CALENDAR_ICS = 'https://script.google.com/macros/s/AKfycbzS6cXphSl1652CoD3ROjSvuet26Jkiq1I-E7zFAmsae2emgH6_7L_D-iEdFfV09CdImw/exec';
+   
 
     const { createClient } = supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -552,107 +552,64 @@
         return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }
 
-    // ─── CALENDAR ─────────────────────────────────────────────────────────
-    async function loadCalendar() {
-        const panel = document.getElementById('calendarPanel');
-        try {
-            const response = await fetch(CALENDAR_ICS);
+  // ─── CALENDAR ─────────────────────────────────────────────────────────
+const GROUPING_COLORS = {
+    'Choir':         { bg: '#ede9fe', color: '#6d28d9' },
+    'Birthday':      { bg: '#fce7f3', color: '#9d174d' },
+    'Birthdays':     { bg: '#fce7f3', color: '#9d174d' },
+    'Anniversary':   { bg: '#fee2e2', color: '#991b1b' },
+    'School pickup': { bg: '#e0f2fe', color: '#0369a1' },
+    'School holiday':{ bg: '#dcfce7', color: '#166534' },
+    'Half term':     { bg: '#dcfce7', color: '#166534' },
+    'Holiday':       { bg: '#dcfce7', color: '#166534' },
+    'Family':        { bg: '#fef3c7', color: '#92400e' },
+    'Personal':      { bg: '#f3f4f6', color: '#374151' },
+};
 
-               
-            if (!response.ok) throw new Error('Failed to fetch calendar');
-            
-            const text = await response.text();
-console.log(text); // add this line temporarily
-const events = parseICS(text);
-            
-            const today = new Date().toISOString().split('T')[0];
-            const todayEvents = events.filter(e => e.date === today);
-            todayEvents.sort((a, b) => {
-                if (a.allDay && !b.allDay) return -1;
-                if (!a.allDay && b.allDay) return 1;
-                return (a.time || '').localeCompare(b.time || '');
-            });
+async function loadCalendar() {
+    const panel = document.getElementById('calendarPanel');
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await db
+            .from('events')
+            .select('*')
+            .eq('event_date', today)
+            .order('event_time', { ascending: true, nullsFirst: true });
 
-            document.getElementById('calCount').textContent = todayEvents.length;
+        if (error) throw error;
 
-            if (todayEvents.length === 0) {
-                panel.innerHTML = '<div class="empty-panel">Nothing scheduled today 🎉</div>';
-                return;
-            }
+        document.getElementById('calCount').textContent = data.length;
 
-            panel.innerHTML = todayEvents.map(e => `
-                <div class="cal-event">
-                    <div class="cal-time ${e.allDay ? 'allday' : ''}">${e.allDay ? 'All day' : e.time}</div>
-                    <div>
-                        <div class="cal-title">${e.title}</div>
-                        ${e.location ? `<div class="cal-location">📍 ${e.location}</div>` : ''}
-                    </div>
-                </div>`).join('');
-        } catch (err) {
-            console.error('Calendar error:', err);
-            panel.innerHTML = `<div class="cal-error">Could not load calendar.<br><small>${err.message}</small></div>`;
-            document.getElementById('calCount').textContent = '—';
+        if (data.length === 0) {
+            panel.innerHTML = '<div class="empty-panel">Nothing scheduled today 🎉</div>';
+            return;
         }
+
+        panel.innerHTML = data.map(e => {
+            const colors = GROUPING_COLORS[e.grouping] || { bg: '#f3f4f6', color: '#374151' };
+            const timeStr = e.event_time ? e.event_time.slice(0, 5) : 'All day';
+            const isAllDay = !e.event_time;
+            return `<div class="cal-event">
+                <div class="cal-time ${isAllDay ? 'allday' : ''}">${timeStr}</div>
+                <div style="flex:1">
+                    <div class="cal-title">${e.title}</div>
+                    ${e.place ? `<div class="cal-location">📍 ${e.place}</div>` : ''}
+                    ${e.notes ? `<div class="cal-location">📝 ${e.notes}</div>` : ''}
+                </div>
+                ${e.grouping ? `<span class="task-cat" style="background:${colors.bg}; color:${colors.color}; align-self:flex-start">${e.grouping}</span>` : ''}
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('Calendar error:', err);
+        panel.innerHTML = `<div class="cal-error">Could not load events.<br><small>${err.message}</small></div>`;
+        document.getElementById('calCount').textContent = '—';
     }
-
- function parseICS(text) {
-    const events = [];
-    const lines = text.replace(/\r\n /g, '').replace(/\r\n/g, '\n').split('\n');
-    let current = null;
-
-    for (const line of lines) {
-        if (line === 'BEGIN:VEVENT') {
-            current = {};
-        } else if (line === 'END:VEVENT' && current) {
-            if (current.title) events.push(current);
-            current = null;
-        } else if (current) {
-            if (line.startsWith('SUMMARY:')) {
-                current.title = line.replace('SUMMARY:', '').trim();
-            } else if (line.startsWith('LOCATION:')) {
-                current.location = line.replace('LOCATION:', '').trim();
-            } else if (line.startsWith('DTSTART;VALUE=DATE:')) {
-                const d = line.replace('DTSTART;VALUE=DATE:', '').trim();
-                current.date = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
-                current.allDay = true;
-            } else if (line.startsWith('DTSTART;TZID=') || line.startsWith('DTSTART:')) {
-                const raw = line.includes(':') ? line.split(':').slice(1).join(':').trim() : '';
-                if (!raw) continue;
-
-                const year  = raw.slice(0,4);
-                const month = raw.slice(4,6);
-                const day   = raw.slice(6,8);
-
-                if (raw.length <= 8) {
-                    // Date only
-                    current.date = `${year}-${month}-${day}`;
-                    current.allDay = true;
-                } else if (raw.endsWith('Z')) {
-                    // UTC time — convert to local
-                    const h = raw.slice(9,11);
-                    const m = raw.slice(11,13);
-                    const utc = new Date(`${year}-${month}-${day}T${h}:${m}:00Z`);
-                    current.date = utc.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-                    current.time = utc.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                    current.allDay = false;
-                } else {
-                    // Local time with TZID — no conversion needed
-                    const h = raw.slice(9,11);
-                    const m = raw.slice(11,13);
-                    current.date = `${year}-${month}-${day}`;
-                    current.time = `${h}:${m}`;
-                    current.allDay = false;
-                }
-            }
-        }
-    }
-    return events;
 }
 
-    function refreshCalendar() {
-        document.getElementById('calendarPanel').innerHTML = '<div class="cal-loading"><span class="spinner"></span>Refreshing...</div>';
-        loadCalendar();
-    }
+function refreshCalendar() {
+    document.getElementById('calendarPanel').innerHTML = '<div class="cal-loading"><span class="spinner"></span>Refreshing...</div>';
+    loadCalendar();
+}
 
     // ─── TASKS ────────────────────────────────────────────────────────────
     function renderTasks() {
