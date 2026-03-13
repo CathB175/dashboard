@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -387,6 +388,7 @@
         <button class="header-btn" onclick="openAddTaskModal()">+ Add Task</button>
         <button class="header-btn" onclick="openWeeklyAdminModal()">⚙️ Weekly Tasks</button>
         <button class="header-btn" onclick="refreshCalendar()">↻ Refresh</button>
+<button class="header-btn" onclick="db.auth.signOut()" style="background: rgba(255,255,255,0.1); opacity: 0.7;">🚪 Sign Out</button>
     </div>
 </div>
 
@@ -871,18 +873,19 @@
 
     
 
-   async function initAuth() {
+  async function initAuth() {
     const { data: { session } } = await db.auth.getSession();
     document.getElementById('loading-screen').style.display = 'none';
     if (session) {
-        init();
+        document.getElementById('login-screen').classList.remove('show');
+        await init();
     } else {
         document.getElementById('login-screen').classList.add('show');
     }
-    db.auth.onAuthStateChange((_event, session) => {
+
+    db.auth.onAuthStateChange(async (_event, session) => {
         if (session) {
             document.getElementById('login-screen').classList.remove('show');
-            init();
         } else {
             document.getElementById('login-screen').classList.add('show');
         }
