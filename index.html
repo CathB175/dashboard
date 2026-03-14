@@ -478,6 +478,65 @@
 }
 .nav-tab:hover { background: rgba(255,255,255,0.3); }
 .nav-tab.active { background: white; color: #0d9488; }
+
+/* ── TASKS PAGE ── */
+.tasks-page-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.tasks-page-item:hover { background: #f9fafb; }
+.tasks-page-item.is-done { opacity: 0.55; }
+.tasks-page-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.15s;
+    cursor: pointer;
+}
+.tasks-page-check.done { background: #14b8a6; border-color: #14b8a6; color: white; }
+.tasks-page-body { flex: 1; min-width: 0; }
+.tasks-page-title { font-size: 14px; font-weight: 600; color: #1a202c; }
+.tasks-page-title.done { text-decoration: line-through; color: #9ca3af; }
+.tasks-page-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+
+/* ── MOBILE HEADER FIX ── */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 20px;
+    }
+    .header-right {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        width: 100%;
+    }
+    .header-right .nav-tab,
+    .header-right .header-btn {
+        flex: 1;
+        min-width: calc(50% - 4px);
+        text-align: center;
+        font-size: 12px;
+        padding: 8px 10px;
+    }
+}
         
     </style>
 </head>
@@ -503,7 +562,8 @@
     </div>
     <div class="header-right">
         <button class="nav-tab active" id="tab-dashboard" onclick="showPage('dashboard')">📋 Dashboard</button>
-        <button class="nav-tab" id="tab-events" onclick="showPage('events')">📅 Events</button>
+<button class="nav-tab" id="tab-tasks" onclick="showPage('tasks')">✅ Tasks</button>
+<button class="nav-tab" id="tab-events" onclick="showPage('events')">📅 Events</button>
         <button class="header-btn" onclick="openAddTaskModal()">+ Add Task</button>
         <button class="header-btn" onclick="openWeeklyAdminModal()">⚙️ Weekly Tasks</button>
         <button class="header-btn" onclick="refreshCalendar()">↻ Refresh</button>
@@ -550,6 +610,25 @@
 </div>
 </div>
 
+<!-- TASKS PAGE -->
+<div id="page-tasks" class="page">
+    <div style="max-width:1300px; margin:0 auto; padding:28px 24px;">
+        <div class="events-toolbar">
+            <input type="text" class="events-search" id="tasksSearch" placeholder="Search tasks..." oninput="renderTasksPage()">
+            <select class="events-filter" id="tasksCategoryFilter" onchange="renderTasksPage()">
+                <option value="">All categories</option>
+            </select>
+            <select class="events-filter" id="tasksStatusFilter" onchange="renderTasksPage()">
+                <option value="pending">Pending</option>
+                <option value="done">Completed</option>
+                <option value="all">All</option>
+            </select>
+            <button class="events-add-btn" onclick="openAddTaskModal()">+ Add Task</button>
+        </div>
+        <div id="tasksPageContent"></div>
+    </div>
+</div>
+    
 <!-- EVENTS PAGE -->
 <div id="page-events" class="page">
     <div style="max-width:1300px; margin:0 auto; padding:28px 24px;">
@@ -637,7 +716,7 @@
     // ─── INIT ─────────────────────────────────────────────────────────────
     async function init() {
     setHeaderDate();
-    await Promise.all([loadData(), loadEvents()]);
+    await Promise.all([loadData(), loadEvents(), loadAllTasks()]);
     loadCalendar();
     renderTasks();
     renderWeekly();
@@ -869,8 +948,11 @@ function refreshCalendar() {
 
         closeTaskModal();
         renderTasks();
+        await loadAllTasks();
+renderTasksPage();
     }
 
+    
     async function deleteTask() {
         if (!editingTaskId) return;
         if (!confirm('Delete this task?')) return;
@@ -878,6 +960,8 @@ function refreshCalendar() {
         tasks = tasks.filter(t => t.id !== editingTaskId);
         closeTaskModal();
         renderTasks();
+        await loadAllTasks();
+renderTasksPage();
     }
 
     // ─── WEEKLY TASKS ─────────────────────────────────────────────────────
@@ -1041,11 +1125,98 @@ document.addEventListener('keydown', e => {
 
     // ─── PAGE NAVIGATION ──────────────────────────────────────────────────
 function showPage(page) {
-    document.getElementById('page-dashboard').classList.toggle('active', page === 'dashboard');
-    document.getElementById('page-events').classList.toggle('active', page === 'events');
-    document.getElementById('tab-dashboard').classList.toggle('active', page === 'dashboard');
-    document.getElementById('tab-events').classList.toggle('active', page === 'events');
+    ['dashboard', 'tasks', 'events'].forEach(p => {
+        document.getElementById(`page-${p}`).classList.toggle('active', p === page);
+        document.getElementById(`tab-${p}`).classList.toggle('active', p === page);
+    });
     if (page === 'events') renderEventsPage();
+    if (page === 'tasks') renderTasksPage();
+}
+
+    // ─── TASKS PAGE ───────────────────────────────────────────────────────
+let allTasks = [];
+
+async function loadAllTasks() {
+    const { data } = await db
+        .from('tasks')
+        .select('*, task_categories(name, color)')
+        .order('due_date', { ascending: true, nullsFirst: false });
+    allTasks = data || [];
+    populateTasksCategoryFilter();
+}
+
+function populateTasksCategoryFilter() {
+    const sel = document.getElementById('tasksCategoryFilter');
+    const cats = [...new Set(allTasks.map(t => t.task_categories?.name).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">All categories</option>' +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function renderTasksPage() {
+    const search = document.getElementById('tasksSearch').value.toLowerCase();
+    const category = document.getElementById('tasksCategoryFilter').value;
+    const status = document.getElementById('tasksStatusFilter').value;
+    const today = new Date().toISOString().split('T')[0];
+
+    let filtered = allTasks.filter(t => {
+        const matchesSearch = !search || t.title.toLowerCase().includes(search) || (t.notes && t.notes.toLowerCase().includes(search));
+        const matchesCategory = !category || t.task_categories?.name === category;
+        const matchesStatus = status === 'all' ? true : status === 'done' ? t.is_done : !t.is_done;
+        return matchesSearch && matchesCategory && matchesStatus;
+    });
+
+    if (filtered.length === 0) {
+        document.getElementById('tasksPageContent').innerHTML = '<div class="empty-panel" style="padding:48px">No tasks found</div>';
+        return;
+    }
+
+    document.getElementById('tasksPageContent').innerHTML = filtered.map(t => {
+        const cat = t.task_categories;
+        const catHtml = cat ? `<span class="task-cat" style="background:${cat.color}22; color:${cat.color}">${cat.name}</span>` : '';
+        const dateStr = formatDate(t.due_date);
+        const dateClass = isOverdue(t.due_date) && !t.is_done ? 'task-date overdue' : isToday(t.due_date) ? 'task-date today' : 'task-date';
+        return `<div class="tasks-page-item ${t.is_done ? 'is-done' : ''}">
+            <div class="tasks-page-check ${t.is_done ? 'done' : ''}" onclick="toggleTaskFromPage(${t.id}, ${t.is_done})">${t.is_done ? '✓' : ''}</div>
+            <div class="tasks-page-body" onclick="openEditTaskModalFromPage(${t.id})">
+                <div class="tasks-page-title ${t.is_done ? 'done' : ''}">${t.title}</div>
+                <div class="tasks-page-meta">
+                    ${dateStr ? `<span class="${dateClass}">📅 ${dateStr}</span>` : ''}
+                    ${catHtml}
+                    ${t.notes ? `<span class="task-notes">${t.notes}</span>` : ''}
+                    ${t.is_done && t.completed_at ? `<span class="task-date">✓ ${new Date(t.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function toggleTaskFromPage(id, isDone) {
+    const newDone = !isDone;
+    await db.from('tasks').update({
+        is_done: newDone,
+        completed_at: newDone ? new Date().toISOString() : null
+    }).eq('id', id);
+    allTasks = allTasks.map(t => t.id === id ? { ...t, is_done: newDone, completed_at: newDone ? new Date().toISOString() : null } : t);
+    // Also keep dashboard tasks in sync
+    if (newDone) {
+        tasks = tasks.filter(t => t.id !== id);
+    } else {
+        await loadData();
+    }
+    renderTasksPage();
+    renderTasks();
+}
+
+function openEditTaskModalFromPage(id) {
+    const task = allTasks.find(t => t.id === id);
+    editingTaskId = id;
+    document.getElementById('taskModalTitle').textContent = 'Edit Task';
+    document.getElementById('tTitle').value = task.title;
+    document.getElementById('tDueDate').value = task.due_date || '';
+    document.getElementById('tNotes').value = task.notes || '';
+    document.getElementById('tDeleteBtn').classList.remove('hidden');
+    populateCategorySelect(task.category_id);
+    document.getElementById('taskModal').classList.add('show');
 }
 
 // ─── EVENTS PAGE ──────────────────────────────────────────────────────
